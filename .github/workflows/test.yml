@@ -54,14 +54,52 @@ jobs:
             FILE_NAME=${{ matrix.archive.file }}
             ARIA2_OPTIONS=-x 16 -s 16
 
-      - name: Verify extracted files
+      - name: Build source stage image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: source
+          push: false
+          load: true
+          tags: source-images-source:${{ matrix.archive.file }}
+          build-args: |
+            DOWNLOAD_URL=${{ matrix.archive.url }}
+            FILE_NAME=${{ matrix.archive.file }}
+            ARIA2_OPTIONS=-x 16 -s 16
+
+      - name: Verify downloaded and extracted files via docker cp
         run: |
-          IMAGE=source-images-test:${{ matrix.archive.file }}
-          echo "Testing image $IMAGE"
-          docker run --rm "$IMAGE" sh -euxc '
-            ls -A / | sort > /tmp/list
-            echo "Contents:"; cat /tmp/list
-            # ensure exactly two entries and they are hello.txt and world.txt
-            test "$(wc -l < /tmp/list)" -eq 2
-            test "$(paste -sd "," /tmp/list)" = "hello.txt,world.txt"
-          '
+          SRC_IMAGE=source-images-source:${{ matrix.archive.file }}
+          UNP_IMAGE=source-images-test:${{ matrix.archive.file }}
+
+          echo "Creating containers from images"
+          SRC_C=$(docker create "$SRC_IMAGE")
+          UNP_C=$(docker create "$UNP_IMAGE")
+
+          echo "Copying / from source stage and / from unpacked stage"
+          mkdir -p /tmp/src_contents /tmp/unp_contents
+          docker cp "$SRC_C":/ /tmp/src_contents || true
+          docker cp "$UNP_C":/ /tmp/unp_contents || true
+
+          echo "Removing temporary containers"
+          docker rm "$SRC_C" "$UNP_C" || true
+
+          echo "Source downloads contents";
+          if [ -d /tmp/src_contents/downloads ]; then ls -A /tmp/src_contents/downloads | sort > /tmp/src_list || true; else echo "(no downloads dir)" > /tmp/src_list; fi
+          cat /tmp/src_list || true
+
+          echo "Unpacked contents:";
+          if [ -d /tmp/unp_contents/unpacked ]; then ls -A /tmp/unp_contents/unpacked | sort > /tmp/unp_list || true; else echo "(no unpacked dir)" > /tmp/unp_list; fi
+          cat /tmp/unp_list || true
+
+          echo "Asserting downloaded file exists and matches expected filename"
+          test "$(wc -l < /tmp/src_list)" -eq 1
+          test "$(cat /tmp/src_list)" = "${{ matrix.archive.file }}"
+
+          echo "Asserting unpacked dir contains exactly hello.txt and world.txt"
+          test "$(wc -l < /tmp/unp_list)" -eq 2
+          test "$(paste -sd "," /tmp/unp_list)" = "hello.txt,world.txt"
+
+          echo "Cleaning temporary files"
+          rm -rf /tmp/src_contents /tmp/unp_contents /tmp/src_list /tmp/unp_list
