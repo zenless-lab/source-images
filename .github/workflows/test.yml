@@ -70,9 +70,9 @@ jobs:
 
       - name: Verify downloaded files
         run: |
-          id=$(docker create ${{ matrix.archive.file }}:source)
+          id=$(docker create ${{ matrix.archive.file }}:source /dummy)
           docker cp $id:/ ./_downloaded_files
-          docker rm $id
+          docker rm -v $id
           if [[ ! -f ./_downloaded_files/${{ matrix.archive.file }} ]]; then
             echo "${{ matrix.archive.file }} not found!" >&2
             exit 1
@@ -89,9 +89,9 @@ jobs:
           fi
       - name: Verify unpacked files
         run: |
-          id=$(docker create ${{ matrix.archive.file }}:unpacked)
+          id=$(docker create ${{ matrix.archive.file }}:unpacked /dummy)
           docker cp $id:/ ./_unpacked_files
-          docker rm $id
+          docker rm -v $id
           if [[ ! -f ./_unpacked_files/hello.txt ]]; then
             echo "hello.txt not found!" >&2
             exit 1
