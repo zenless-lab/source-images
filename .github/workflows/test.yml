@@ -111,7 +111,6 @@ jobs:
           push: false
           load: true
           tags: ${{ matrix.archive.file }}:test
-          target: default
           build-args: |
             FILE_NAME=${{ matrix.archive.file }}
           cache-from: type=gha
