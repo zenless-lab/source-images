@@ -1,0 +1,114 @@
+name: Test downloading and extracting test archives
+
+permissions:
+  contents: read
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-archives:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        archive:
+          - file: test.tar
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tar
+          - file: test.tar.bz2
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tar.bz2
+          - file: test.tar.gz
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tar.gz
+          - file: test.tar.xz
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tar.xz
+          - file: test.tar.zst
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tar.zst
+          - file: test.tbz2
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tbz2
+          - file: test.tgz
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tgz
+          - file: test.txz
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.txz
+          - file: test.zip
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.zip
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate Dockerfile for tests
+        run: |
+          cat > ./Dockerfile.test <<'EOF'
+          FROM ubuntu:noble
+          SHELL ["/bin/bash", "-c"]
+          RUN apt-get update \
+              && apt-get install -y --no-install-recommends \
+                  coreutils \
+                  findutils \
+              && rm -rf /var/lib/apt/lists/*
+          WORKDIR /workspace
+          ARG FILE_NAME
+          RUN --mount=type=bind,from=test-image:source,target=/downloaded,source=/ \
+              if [[ ! -f /downloaded/${FILE_NAME} ]]; then \
+                echo "${FILE_NAME} not found!" >&2; exit 1; \
+              fi; \
+              size=$(stat -c%s "/downloaded/${FILE_NAME}"); \
+              if [[ "$size" -le 0 ]]; then \
+                echo "${FILE_NAME} is empty!" >&2; exit 1; \
+              fi; \
+              file_count=$(find /downloaded -type f | wc -l); \
+              if [[ "$file_count" -ne 1 ]]; then \
+                echo "Unexpected number of files found: $file_count" >&2; exit 1; \
+              fi
+          RUN --mount=type=bind,from=test-image:unpacked,target=/unpacked,source=/ \
+              if [[ ! -f /unpacked/hello.txt ]]; then \
+                echo "hello.txt not found!" >&2; exit 1; \
+              fi; \
+              if [[ ! -f /unpacked/world.txt ]]; then \
+                echo "world.txt not found!" >&2; exit 1; \
+              fi; \
+              file_count=$(find /unpacked -type f | wc -l); \
+              if [[ "$file_count" -ne 2 ]]; then \
+                echo "Unexpected number of files found: $file_count" >&2; exit 1; \
+              fi
+          EOF
+
+      - name: Build image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: unpacked
+          push: false
+          load: true
+          tags: test-image:unpacked
+          build-args: |
+            DOWNLOAD_URL=${{ matrix.archive.url }}
+            FILE_NAME=${{ matrix.archive.file }}
+            ARIA2_OPTIONS=-x 16 -s 16
+
+      - name: Build source stage image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: source
+          push: false
+          load: true
+          tags: test-image:source
+          build-args: |
+            DOWNLOAD_URL=${{ matrix.archive.url }}
+            FILE_NAME=${{ matrix.archive.file }}
+            ARIA2_OPTIONS=-x 16 -s 16
+
+      - name: Build test image
+        run: |
+          DOCKER_BUILDKIT=1 docker build \
+            -f ./Dockerfile.test \
+            --build-arg FILE_NAME=${{ matrix.archive.file }} \
+            -t test-image:test \
+            .
