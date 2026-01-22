@@ -1,0 +1,67 @@
+name: Test downloading and extracting test archives
+
+permissions:
+  contents: read
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-archives:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        archive:
+          - file: test.tar
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tar
+          - file: test.tar.bz2
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tar.bz2
+          - file: test.tar.gz
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tar.gz
+          - file: test.tar.xz
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tar.xz
+          - file: test.tar.zst
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tar.zst
+          - file: test.tbz2
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tbz2
+          - file: test.tgz
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.tgz
+          - file: test.txz
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.txz
+          - file: test.zip
+            url: https://github.com/zenless-lab/source-images/releases/download/test-archives/test.zip
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: unpacked
+          push: false
+          load: true
+          tags: source-images-test:${{ matrix.archive.file }}
+          build-args: |
+            DOWNLOAD_URL=${{ matrix.archive.url }}
+            FILE_NAME=${{ matrix.archive.file }}
+            ARIA2_OPTIONS=-x 16 -s 16
+
+      - name: Verify extracted files
+        run: |
+          IMAGE=source-images-test:${{ matrix.archive.file }}
+          echo "Testing image $IMAGE"
+          docker run --rm "$IMAGE" sh -euxc '
+            ls -A / | sort > /tmp/list
+            echo "Contents:"; cat /tmp/list
+            # ensure exactly two entries and they are hello.txt and world.txt
+            test "$(wc -l < /tmp/list)" -eq 2
+            test "$(paste -sd "," /tmp/list)" = "hello.txt,world.txt"
+          '
