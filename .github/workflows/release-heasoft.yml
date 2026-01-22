@@ -18,7 +18,7 @@ jobs:
   context:
     runs-on: ubuntu-latest
     outputs:
-      month: ${{ steps.vars.outputs.month }}
+      period: ${{ steps.vars.outputs.period }}
       release_tag: ${{ steps.vars.outputs.release_tag }}
       release_name: ${{ steps.vars.outputs.release_name }}
       scope: ${{ steps.vars.outputs.scope }}
@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          month=$(date -u +%Y%m)
+          period=$(date -u +%Y%m)
           release_tag=""
           release_name=""
           scope="all"
@@ -43,15 +43,15 @@ jobs:
               scope="all"
             fi
           fi
-          echo "month=$month" >> "$GITHUB_OUTPUT"
+          echo "period=$period" >> "$GITHUB_OUTPUT"
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
           echo "release_name=$release_name" >> "$GITHUB_OUTPUT"
           echo "scope=$scope" >> "$GITHUB_OUTPUT"
 
-  heasoft:
+  build:
     runs-on: ubuntu-latest
     needs: context
-    if: needs.context.outputs.scope != 'name' || needs.context.outputs.release_name == 'heasoft-src'
+    if: needs.context.outputs.scope != 'name' || needs.context.outputs.release_name == 'heasoft'
     strategy:
       matrix:
         version: ["6.36"]
@@ -75,8 +75,10 @@ jobs:
           images: ${{ secrets.DOCKER_USERNAME }}/heasoft-src
           tags: |
             type=raw,value=source,enable=${{ matrix.version == env.DEFAULT_HEASOFT_VERSION }}
-            type=raw,value=source-${{ needs.context.outputs.month }}
-            type=raw,value=${{ needs.context.outputs.release_tag }},enable=${{ needs.context.outputs.release_tag != '' }}
+            type=raw,value=source-${{ needs.context.outputs.period }},enable=${{ matrix.version == env.DEFAULT_HEASOFT_VERSION }}
+            type=raw,value=source-${{ matrix.version }}
+            type=raw,value=source-${{ matrix.version }}-${{ needs.context.outputs.period }}
+            type=raw,value=source-${{ needs.context.outputs.release_tag }},enable=${{ needs.context.outputs.release_tag != '' }}
 
       - name: Extract unpacked image metadata
         id: meta_unpacked
@@ -84,10 +86,10 @@ jobs:
         with:
           images: ${{ secrets.DOCKER_USERNAME }}/heasoft-src
           tags: |
-            type=raw,value=${{ matrix.version }}
-            type=raw,value=${{ matrix.version }}-${{ needs.context.outputs.month }}
-            type=raw,value=${{ needs.context.outputs.month }}
             type=raw,value=latest,enable=${{ matrix.version == env.DEFAULT_HEASOFT_VERSION }}
+            type=raw,value=${{ needs.context.outputs.period }},enable=${{ matrix.version == env.DEFAULT_HEASOFT_VERSION }}
+            type=raw,value=${{ matrix.version }}
+            type=raw,value=${{ matrix.version }}-${{ needs.context.outputs.period }}
             type=raw,value=${{ needs.context.outputs.release_tag }},enable=${{ needs.context.outputs.release_tag != '' }}
 
       - name: Build and push source image
