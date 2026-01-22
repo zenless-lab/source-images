@@ -83,7 +83,7 @@ jobs:
           target: unpacked
           push: false
           load: true
-          tags: ${{ matrix.archive.file }}:unpacked
+          tags: test-image:unpacked
           build-args: |
             DOWNLOAD_URL=${{ matrix.archive.url }}
             FILE_NAME=${{ matrix.archive.file }}
@@ -97,7 +97,7 @@ jobs:
           target: source
           push: false
           load: true
-          tags: ${{ matrix.archive.file }}:source
+          tags: test-image:source
           build-args: |
             DOWNLOAD_URL=${{ matrix.archive.url }}
             FILE_NAME=${{ matrix.archive.file }}
@@ -108,8 +108,7 @@ jobs:
           DOCKER_BUILDKIT=1 docker build \
             -f ./Dockerfile.test \
             --build-arg FILE_NAME=${{ matrix.archive.file }} \
-            --build-context source=${{ matrix.archive.file }}:source \
-            --build-context unpacked=${{ matrix.archive.file }}:unpacked \
-            -t test-${{ matrix.archive.file }}:latest \
+            --build-context source=test-image:source \
+            --build-context unpacked=test-image:unpacked \
+            -t test-image:test \
             .
-          
