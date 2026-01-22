@@ -1,0 +1,57 @@
+name: Publish test archives
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag name"
+        required: false
+        default: "test-archives"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install archive tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pigz \
+            pbzip2 \
+            xz-utils \
+            zstd \
+            zip \
+            unzip
+
+      - name: Prepare sample files
+        run: |
+          mkdir -p sample
+          echo "hello" > sample/hello.txt
+          echo "world" > sample/world.txt
+
+      - name: Build test archives
+        run: |
+          mkdir -p dist
+          tar -czf dist/test.tar.gz -C sample .
+          tar -czf dist/test.tgz -C sample .
+          tar -cjf dist/test.tar.bz2 -C sample .
+          tar -cjf dist/test.tbz2 -C sample .
+          tar -cJf dist/test.tar.xz -C sample .
+          tar -cJf dist/test.txz -C sample .
+          tar --use-compress-program="zstd -T0" -cf dist/test.tar.zst -C sample .
+          tar -cf dist/test.tar -C sample .
+          (cd sample && zip -r ../dist/test.zip .)
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2.5.0
+        with:
+          tag_name: ${{ inputs.tag_name }}
+          name: ${{ inputs.tag_name }}
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
