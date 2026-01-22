@@ -13,7 +13,7 @@ ARG ARIA2_OPTIONS="-x 16 -s 16"
 RUN aria2c ${ARIA2_OPTIONS} -d /downloads -o "${FILE_NAME}" "${DOWNLOAD_URL}"
 
 FROM scratch AS source
-COPY --from=downloader /downloads /
+COPY --from=downloader /downloads /downloads
 
 FROM ubuntu:noble AS unpacker
 RUN apt-get update \
@@ -44,4 +44,4 @@ RUN --mount=type=bind,from=downloader,source=/downloads,target=/source \
     done
 
 FROM scratch AS unpacked
-COPY --from=unpacker /unpacked /
+COPY --from=unpacker /unpacked /unpacked
