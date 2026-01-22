@@ -1,0 +1,18 @@
+# Build artifacts
+*.tar.gz
+*.zip
+/tmp/
+
+# Docker
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

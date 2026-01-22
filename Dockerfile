@@ -26,5 +26,9 @@ RUN if [ -n "${DOWNLOAD_URL}" ]; then \
         echo "No DOWNLOAD_URL provided, skipping download"; \
     fi
 
+# Convert build args to environment variables for runtime use
+ENV VARIANT_NAME=${VARIANT} \
+    DATA_DIR=${OUTPUT_DIR}
+
 # Set the default command
-CMD ["sh", "-c", "echo 'Image built successfully for variant: ${VARIANT}' && ls -la ${OUTPUT_DIR}"]
+CMD ["sh", "-c", "echo \"Image built successfully for variant: $VARIANT_NAME\" && ls -la $DATA_DIR"]

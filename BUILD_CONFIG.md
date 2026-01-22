@@ -18,13 +18,15 @@ Add the following secrets to your GitHub repository:
 
 ### 2. Customize Variants
 
-Edit `.github/workflows/build-push.yml` to define your variants:
+Edit `.github/workflows/build-push.yml` to define your variants in the `env` section at the top:
 
 ```yaml
-ALL_VARIANTS='["variant1", "variant2", "variant3"]'
+env:
+  REGISTRY: docker.io
+  ALL_VARIANTS: '["variant1", "variant2", "variant3"]'
 ```
 
-And their corresponding download URLs in the case statement:
+Then configure the download URLs for each variant in the `Set build matrix` step by editing the case statement:
 
 ```yaml
 case "$VARIANT" in

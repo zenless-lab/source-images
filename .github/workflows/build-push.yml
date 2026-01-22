@@ -15,7 +15,8 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Define all available variants - customize this list as needed
+  ALL_VARIANTS: '["variant1", "variant2", "variant3"]'
 
 jobs:
   # Job to determine which variants to build
@@ -63,18 +64,46 @@ jobs:
       - name: Set build matrix
         id: set-matrix
         run: |
-          # Define all available variants
-          # This can be customized based on your needs
-          ALL_VARIANTS='["variant1", "variant2", "variant3"]'
+          # Use the variants defined in environment variable
+          ALL_VARIANTS='${{ env.ALL_VARIANTS }}'
           
           if [[ "${{ steps.parse-tag.outputs.is_release_all }}" == "true" ]]; then
-            # Build all variants
-            echo "matrix={\"variant\": $ALL_VARIANTS, \"include\": [{\"variant\": \"variant1\", \"url\": \"https://example.com/variant1.zip\"}, {\"variant\": \"variant2\", \"url\": \"https://example.com/variant2.zip\"}, {\"variant\": \"variant3\", \"url\": \"https://example.com/variant3.zip\"}]}" >> $GITHUB_OUTPUT
+            # Build all variants - construct the include array
+            INCLUDE='['
+            FIRST=true
+            for variant in $(echo "$ALL_VARIANTS" | jq -r '.[]'); do
+              if [ "$FIRST" = true ]; then
+                FIRST=false
+              else
+                INCLUDE+=','
+              fi
+              
+              # Map variant to URL (customize these URLs as needed)
+              case "$variant" in
+                variant1)
+                  URL="https://example.com/variant1.zip"
+                  ;;
+                variant2)
+                  URL="https://example.com/variant2.zip"
+                  ;;
+                variant3)
+                  URL="https://example.com/variant3.zip"
+                  ;;
+                *)
+                  URL="https://example.com/${variant}.zip"
+                  ;;
+              esac
+              
+              INCLUDE+="{\"variant\": \"$variant\", \"url\": \"$URL\"}"
+            done
+            INCLUDE+=']'
+            
+            echo "matrix={\"variant\": $ALL_VARIANTS, \"include\": $INCLUDE}" >> $GITHUB_OUTPUT
             echo "Building all variants"
           else
             # Build only specific variant
             VARIANT="${{ steps.parse-tag.outputs.variant }}"
-            # Filter to single variant
+            # Map variant to URL
             case "$VARIANT" in
               variant1)
                 URL="https://example.com/variant1.zip"
