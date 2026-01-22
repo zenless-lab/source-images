@@ -51,6 +51,7 @@ jobs:
                   findutils \
               && rm -rf /var/lib/apt/lists/*
           WORKDIR /workspace
+          ARG FILE_NAME
           RUN --mount=type=bind,from=test-image:source,target=/downloaded,source=/ \
               if [[ ! -f /downloaded/${FILE_NAME} ]]; then \
                 echo "${FILE_NAME} not found!" >&2; exit 1; \
