@@ -65,14 +65,14 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
+          username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Extract source image metadata
         id: meta_source
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKER_USERNAME }}/heasoft-src
+          images: ${{ vars.DOCKER_USERNAME }}/heasoft-src
           tags: |
             type=raw,value=source,enable=${{ matrix.version == env.DEFAULT_HEASOFT_VERSION }}
             type=raw,value=source-${{ needs.context.outputs.period }},enable=${{ matrix.version == env.DEFAULT_HEASOFT_VERSION }}
@@ -84,7 +84,7 @@ jobs:
         id: meta_unpacked
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKER_USERNAME }}/heasoft-src
+          images: ${{ vars.DOCKER_USERNAME }}/heasoft-src
           tags: |
             type=raw,value=latest,enable=${{ matrix.version == env.DEFAULT_HEASOFT_VERSION }}
             type=raw,value=${{ needs.context.outputs.period }},enable=${{ matrix.version == env.DEFAULT_HEASOFT_VERSION }}
