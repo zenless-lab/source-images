@@ -103,20 +103,13 @@ jobs:
             FILE_NAME=${{ matrix.archive.file }}
             ARIA2_OPTIONS=-x 16 -s 16
 
-      - name: Build test runner image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile.test
-          push: false
-          load: true
-          tags: ${{ matrix.archive.file }}:test
-          build-args: |
-            FILE_NAME=${{ matrix.archive.file }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=docker
-          build-contexts: |
-            source=docker-image://${{ matrix.archive.file }}:source
-            unpacked=docker-image://${{ matrix.archive.file }}:unpacked
+      - name: Build test image
+        run: |
+          DOCKER_BUILDKIT=1 docker build \
+            -f ./Dockerfile.test \
+            --build-arg FILE_NAME=${{ matrix.archive.file }} \
+            --build-context source=${{ matrix.archive.file }}:source \
+            --build-context unpacked=${{ matrix.archive.file }}:unpacked \
+            -t test-${{ matrix.archive.file }}:latest \
+            .
           
