@@ -48,7 +48,7 @@ jobs:
           target: unpacked
           push: false
           load: true
-          tags: source-images-test:${{ matrix.archive.file }}
+          tags: ${{ matrix.archive.file }}:unpacked
           build-args: |
             DOWNLOAD_URL=${{ matrix.archive.url }}
             FILE_NAME=${{ matrix.archive.file }}
@@ -62,44 +62,47 @@ jobs:
           target: source
           push: false
           load: true
-          tags: source-images-source:${{ matrix.archive.file }}
+          tags: ${{ matrix.archive.file }}:source
           build-args: |
             DOWNLOAD_URL=${{ matrix.archive.url }}
             FILE_NAME=${{ matrix.archive.file }}
             ARIA2_OPTIONS=-x 16 -s 16
 
-      - name: Verify downloaded and extracted files via docker cp
+      - name: Verify downloaded files
         run: |
-          SRC_IMAGE=source-images-source:${{ matrix.archive.file }}
-          UNP_IMAGE=source-images-test:${{ matrix.archive.file }}
-
-          echo "Creating containers from images"
-          SRC_C=$(docker create "$SRC_IMAGE")
-          UNP_C=$(docker create "$UNP_IMAGE")
-
-          echo "Copying / from source stage and / from unpacked stage"
-          mkdir -p /tmp/src_contents /tmp/unp_contents
-          docker cp "$SRC_C":/ /tmp/src_contents || true
-          docker cp "$UNP_C":/ /tmp/unp_contents || true
-
-          echo "Removing temporary containers"
-          docker rm "$SRC_C" "$UNP_C" || true
-
-          echo "Source downloads contents";
-          if [ -d /tmp/src_contents/downloads ]; then ls -A /tmp/src_contents/downloads | sort > /tmp/src_list || true; else echo "(no downloads dir)" > /tmp/src_list; fi
-          cat /tmp/src_list || true
-
-          echo "Unpacked contents:";
-          if [ -d /tmp/unp_contents/unpacked ]; then ls -A /tmp/unp_contents/unpacked | sort > /tmp/unp_list || true; else echo "(no unpacked dir)" > /tmp/unp_list; fi
-          cat /tmp/unp_list || true
-
-          echo "Asserting downloaded file exists and matches expected filename"
-          test "$(wc -l < /tmp/src_list)" -eq 1
-          test "$(cat /tmp/src_list)" = "${{ matrix.archive.file }}"
-
-          echo "Asserting unpacked dir contains exactly hello.txt and world.txt"
-          test "$(wc -l < /tmp/unp_list)" -eq 2
-          test "$(paste -sd "," /tmp/unp_list)" = "hello.txt,world.txt"
-
-          echo "Cleaning temporary files"
-          rm -rf /tmp/src_contents /tmp/unp_contents /tmp/src_list /tmp/unp_list
+          id=$(docker create ${{ matrix.archive.file }}:source)
+          docker cp $id:/ ./_downloaded_files
+          docker rm $id
+          if [[ ! -f ./_downloaded_files/${{ matrix.archive.file }} ]]; then
+            echo "${{ matrix.archive.file }} not found!" >&2
+            exit 1
+          fi
+          size=$(stat -c%s "./_downloaded_files/${{ matrix.archive.file }}")
+          if [[ "$size" -le 0 ]]; then
+            echo "${{ matrix.archive.file }} is empty!" >&2
+            exit 1
+          fi
+          file_count=$(find ./_downloaded_files -type f | wc -l)
+          if [[ "$file_count" -ne 1 ]]; then
+            echo "Unexpected number of files found: $file_count" >&2
+            exit 1
+          fi
+      - name: Verify unpacked files
+        run: |
+          id=$(docker create ${{ matrix.archive.file }}:unpacked)
+          docker cp $id:/ ./_unpacked_files
+          docker rm $id
+          if [[ ! -f ./_unpacked_files/hello.txt ]]; then
+            echo "hello.txt not found!" >&2
+            exit 1
+          fi
+          if [[ ! -f ./_unpacked_files/world.txt ]]; then
+            echo "world.txt not found!" >&2
+            exit 1
+          fi
+          file_count=$(find ./_unpacked_files -type f | wc -l)
+          if [[ "$file_count" -ne 2 ]]; then
+            echo "Unexpected number of files found: $file_count" >&2
+            exit 1
+          fi
+          
