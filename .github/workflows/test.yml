@@ -50,7 +50,7 @@ jobs:
                   findutils \
               && rm -rf /var/lib/apt/lists/*
           WORKDIR /workspace
-          RUN --mount=type=bind,from=source,target=/downloaded,source=/ \
+          RUN --mount=type=bind,from=test-image:source,target=/downloaded,source=/ \
               if [[ ! -f /downloaded/${FILE_NAME} ]]; then \
                 echo "${FILE_NAME} not found!" >&2; exit 1; \
               fi; \
@@ -62,7 +62,7 @@ jobs:
               if [[ "$file_count" -ne 1 ]]; then \
                 echo "Unexpected number of files found: $file_count" >&2; exit 1; \
               fi
-          RUN --mount=type=bind,from=unpacked,target=/unpacked,source=/ \
+          RUN --mount=type=bind,from=test-image:unpacked,target=/unpacked,source=/ \
               if [[ ! -f /unpacked/hello.txt ]]; then \
                 echo "hello.txt not found!" >&2; exit 1; \
               fi; \
@@ -108,7 +108,5 @@ jobs:
           DOCKER_BUILDKIT=1 docker build \
             -f ./Dockerfile.test \
             --build-arg FILE_NAME=${{ matrix.archive.file }} \
-            --build-context source=test-image:source \
-            --build-context unpacked=test-image:unpacked \
             -t test-image:test \
             .
