@@ -1,0 +1,163 @@
+name: Build and Push Docker Images
+
+on:
+  # Schedule trigger - runs on the 25th of every month at 00:00 UTC
+  schedule:
+    - cron: '0 0 25 * *'
+  
+  # Trigger on release tags
+  push:
+    tags:
+      - 'release-*'
+  
+  # Manual workflow dispatch for testing
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Job to determine which variants to build
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      is_release_all: ${{ steps.parse-tag.outputs.is_release_all }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Parse release tag
+        id: parse-tag
+        run: |
+          # Check if this is a tag trigger
+          if [[ "${{ github.ref }}" == refs/tags/release-* ]]; then
+            TAG="${{ github.ref_name }}"
+            echo "Processing tag: $TAG"
+            
+            # Extract version and variant from tag
+            # Pattern: release-<version> OR release-<name>-<version>
+            if [[ "$TAG" =~ ^release-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              # Pattern: release-<version> - build all variants
+              echo "is_release_all=true" >> $GITHUB_OUTPUT
+              echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+              echo "Match: release-all with version ${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^release-([a-zA-Z0-9_-]+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              # Pattern: release-<name>-<version> - build specific variant
+              echo "is_release_all=false" >> $GITHUB_OUTPUT
+              echo "variant=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+              echo "version=${BASH_REMATCH[2]}" >> $GITHUB_OUTPUT
+              echo "Match: release-specific variant ${BASH_REMATCH[1]} with version ${BASH_REMATCH[2]}"
+            else
+              echo "Tag does not match expected pattern"
+              exit 1
+            fi
+          else
+            # Scheduled run - build all variants
+            echo "is_release_all=true" >> $GITHUB_OUTPUT
+            echo "version=$(date +%Y.%m.%d)" >> $GITHUB_OUTPUT
+            echo "Scheduled run - building all variants"
+          fi
+      
+      - name: Set build matrix
+        id: set-matrix
+        run: |
+          # Define all available variants
+          # This can be customized based on your needs
+          ALL_VARIANTS='["variant1", "variant2", "variant3"]'
+          
+          if [[ "${{ steps.parse-tag.outputs.is_release_all }}" == "true" ]]; then
+            # Build all variants
+            echo "matrix={\"variant\": $ALL_VARIANTS, \"include\": [{\"variant\": \"variant1\", \"url\": \"https://example.com/variant1.zip\"}, {\"variant\": \"variant2\", \"url\": \"https://example.com/variant2.zip\"}, {\"variant\": \"variant3\", \"url\": \"https://example.com/variant3.zip\"}]}" >> $GITHUB_OUTPUT
+            echo "Building all variants"
+          else
+            # Build only specific variant
+            VARIANT="${{ steps.parse-tag.outputs.variant }}"
+            # Filter to single variant
+            case "$VARIANT" in
+              variant1)
+                URL="https://example.com/variant1.zip"
+                ;;
+              variant2)
+                URL="https://example.com/variant2.zip"
+                ;;
+              variant3)
+                URL="https://example.com/variant3.zip"
+                ;;
+              *)
+                echo "Unknown variant: $VARIANT"
+                exit 1
+                ;;
+            esac
+            echo "matrix={\"variant\": [\"$VARIANT\"], \"include\": [{\"variant\": \"$VARIANT\", \"url\": \"$URL\"}]}" >> $GITHUB_OUTPUT
+            echo "Building only variant: $VARIANT"
+          fi
+
+  # Job to build and push Docker images
+  build-and-push:
+    needs: setup-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
+      fail-fast: false
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        run: |
+          # Determine version from previous job or use date
+          if [[ "${{ github.ref }}" == refs/tags/release-* ]]; then
+            TAG="${{ github.ref_name }}"
+            if [[ "$TAG" =~ ^release-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^release-([a-zA-Z0-9_-]+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              VERSION="${BASH_REMATCH[2]}"
+            fi
+          else
+            VERSION="$(date +%Y.%m.%d)"
+          fi
+          
+          # Create tags
+          VARIANT="${{ matrix.variant }}"
+          IMAGE_BASE="${{ env.REGISTRY }}/${{ github.repository }}"
+          
+          # Tags: repository:variant-version and repository:variant-latest
+          TAGS="${IMAGE_BASE}:${VARIANT}-${VERSION},${IMAGE_BASE}:${VARIANT}-latest"
+          
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building tags: ${TAGS}"
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            VARIANT=${{ matrix.variant }}
+            DOWNLOAD_URL=${{ matrix.url }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Image digest
+        run: echo "Image pushed successfully for variant ${{ matrix.variant }}"
